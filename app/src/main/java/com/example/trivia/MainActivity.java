@@ -5,7 +5,9 @@ import androidx.appcompat.app.AppCompatActivity;
 import android.os.Bundle;
 import android.os.Debug;
 import android.util.JsonReader;
+import android.view.KeyEvent;
 import android.view.View;
+import android.view.inputmethod.EditorInfo;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
@@ -60,28 +62,33 @@ public class MainActivity extends AppCompatActivity {
         answerButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                String guess = String.valueOf(answerEditText.getText());
-                if(guess.equals("")){
-                    Toast.makeText(getApplicationContext(), "Text field can't be left blank!", Toast.LENGTH_LONG).show();
-                }else{
-                    if(isCorrectGuess(guess, answer)){
-                        Toast.makeText(getApplicationContext(), "Correct!", Toast.LENGTH_LONG).show();
-                        getQuestion();
-                    }else{
-                        Toast.makeText(getApplicationContext(), "Incorrect!! the answer was " + answer + ".", Toast.LENGTH_LONG).show();
-                        getQuestion();
-                    }
-                }
+                submitGuess();
             }
         });
 
         getQuestion();
     }
 
+    private void submitGuess()
+    {
+        String guessLowercase = String.valueOf(answerEditText.getText()).toLowerCase();
+        String answerLowercase = answer.toLowerCase(Locale.ROOT);
+        if(guessLowercase.equals("")){
+            Toast.makeText(getApplicationContext(), "Text field can't be left blank!", Toast.LENGTH_LONG).show();
+        }else{
+            if(isCorrectGuess(guessLowercase, answerLowercase) || findGuessInString(guessLowercase, answerLowercase)){
+                Toast.makeText(getApplicationContext(), "Correct! the answer was " + answer + ".", Toast.LENGTH_LONG).show();
+            }else{
+                Toast.makeText(getApplicationContext(), "Incorrect! the answer was " + answer + ".", Toast.LENGTH_LONG).show();
+            }
+            getQuestion();
+        }
+    }
+
     private void getQuestion(){
         answerEditText.setText("");
         Random rand = new Random();
-        int randIndex = rand.nextInt(33459);
+        int randIndex = rand.nextInt(12889);
         String line = "";
 
         BufferedReader reader = null;
@@ -92,18 +99,24 @@ public class MainActivity extends AppCompatActivity {
                 line = reader.readLine();
             }
 
-            line = line.substring(0, line.lastIndexOf(","));
+            if (line != null){
+                line = line.substring(0, line.lastIndexOf(","));
+                JSONObject jsonObject = new JSONObject(line);
 
-            JSONObject jsonObject = new JSONObject(line);
+                String question = jsonObject.getString("question");
+                String category = jsonObject.getString("category_id");
+                if(!question.endsWith("?")) question += "?";
+                JSONArray answerArray = jsonObject.getJSONArray("answers");
 
-            String question = jsonObject.getString("question");
-            String category = jsonObject.getString("category_id");
-            if(!question.endsWith("?")) question += "?";
-            JSONArray answerArray = jsonObject.getJSONArray("answers");
+                questionTextView.setText(question);
+                answer = answerArray.getString(0);
 
-            questionTextView.setText(question);
-            answer = answerArray.getString(0);
-            categoryTextView.setText(category);
+                if(category.contains("_")){
+                    category = category.replace("_", " ");
+                }
+
+                categoryTextView.setText(category);
+            }
 
         }catch (IOException | JSONException e) {
             e.printStackTrace();
@@ -111,6 +124,37 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private boolean isCorrectGuess(String guess, String answer){
-        return guess.toLowerCase(Locale.ROOT).equals(answer.toLowerCase(Locale.ROOT));
+        return guess.equals(answer);
+    }
+
+    private boolean findGuessInString(String guess, String answer){
+        boolean found = false;
+
+        //remove punctuation, 'and,' 'or,' and 'the' from both strings
+        //answer = removeAllNonAlphaNumeric(answer);
+        if(answer.contains("the ")) answer = answer.replace("the ", "\b");
+        if(answer.contains(" and ")) answer = answer.replace(" and " , "\b");
+        if(answer.contains(" or ")) answer = answer.replace(" or ", "\b");
+
+        //guess = removeAllNonAlphaNumeric(guess);
+        if(guess.contains(" and ")) guess = guess.replace(" and ", "\b");
+        if(guess.contains(" or ")) guess = guess.replace(" or ", "\b");
+
+        String[] answerWords = answer.split(" ");
+        String[] guessWords = guess.split(" ");
+        for(int i = 0; i < answerWords.length; i++){
+            for(int j = 0; j < guessWords.length; j++){
+                if(answerWords[i].equals(guessWords[j])){
+                    found = true;
+                    break;
+                }
+            }
+        }
+        return found;
+    }
+
+    private String removeAllNonAlphaNumeric(String s) {
+        if (s == null) return null;
+        return s.replaceAll("[^A-Za-z0-9]", "");
     }
 }
